@@ -22,6 +22,7 @@ class FileStatus {
   private statuses = new Map<string, any>();
   private readonly statusBarItem =
       vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 10);
+  clientRunning = false;
 
   onFileUpdated(fileStatus: any) {
     const filePath = vscode.Uri.parse(fileStatus.uri);
@@ -37,12 +38,15 @@ class FileStatus {
       return;
     }
     this.statusBarItem.text = `clangd: ` + status.state;
+    this.statusBarItem.color = status.state === 'idle' ? 'white' : 'yellow';
     this.statusBarItem.show();
   }
 
   clear() {
     this.statuses.clear();
-    this.statusBarItem.hide();
+    this.statusBarItem.text = 'clangd: error';
+    this.statusBarItem.color = 'red';
+    this.statusBarItem.show();
   }
 
   dispose() { this.statusBarItem.dispose(); }
@@ -83,6 +87,18 @@ export function activate(context: vscode.ExtensionContext) {
   }
   const serverOptions: vscodelc.ServerOptions = clangd;
 
+  const status = new FileStatus();
+
+  const errorHandler: vscodelc.ErrorHandler = {
+    error(error: Error, message: vscodelc.Message, count: number):
+        vscodelc.ErrorAction {
+          return vscodelc.ErrorAction.Continue;
+        },
+    closed(): vscodelc.CloseAction {
+      return vscodelc.CloseAction.DoNotRestart;
+    }
+  };
+
   const clientOptions: vscodelc.LanguageClientOptions = {
         // Register the server for c-family and cuda files.
         documentSelector: [
@@ -98,7 +114,9 @@ export function activate(context: vscode.ExtensionContext) {
         },
         initializationOptions: { clangdFileStatus: true },
         // Do not switch to output window when clangd returns output
-        revealOutputChannelOn: vscodelc.RevealOutputChannelOn.Never
+        revealOutputChannelOn: vscodelc.RevealOutputChannelOn.Never,
+
+        errorHandler
     };
 
   const clangdClient = new ClangdLanguageClient('Clang Language Server',
@@ -131,17 +149,18 @@ export function activate(context: vscode.ExtensionContext) {
             vscode.Uri.parse(sourceUri));
         vscode.window.showTextDocument(doc);
       }));
-  const status = new FileStatus();
   context.subscriptions.push(vscode.Disposable.from(status));
   context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(
       () => { status.updateStatus(); }));
   context.subscriptions.push(clangdClient.onDidChangeState(({newState}) => {
     if (newState == vscodelc.State.Running) {
+      status.clientRunning = true;
       // clangd starts or restarts after crash.
       clangdClient.onNotification(
           'textDocument/clangd.fileStatus',
           (fileStatus) => { status.onFileUpdated(fileStatus); });
     } else if (newState == vscodelc.State.Stopped) {
+      status.clientRunning = false;
       // Clear all cached statuses when clangd crashes.
       status.clear();
     }
@@ -150,4 +169,12 @@ export function activate(context: vscode.ExtensionContext) {
   // "command is not registered" error.
   context.subscriptions.push(vscode.commands.registerCommand(
       'clangd-vscode.activate', async () => {}));
+  context.subscriptions.push(
+      vscode.commands.registerCommand('clangd-vscode.restart', async () => {
+        await clangdClient.stop();
+        await clangdClient.start();
+      }))
+  return {
+    languageClient: clangdClient, isRunning: () => status.clientRunning
+  }
 }
