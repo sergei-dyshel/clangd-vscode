@@ -28,5 +28,8 @@
     "isBackground": true,
 
     // Find compilation problems in the output through tsc in watch mode.
-    "problemMatcher": "$tsc-watch"
+    "problemMatcher": "$tsc-watch",
+    "runOptions": {
+        "runOn": "folderOpen"
+    }
 }

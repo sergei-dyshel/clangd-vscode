@@ -46,4 +46,8 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     }
   }, 5000);
+  return {
+    languageClient: clangdContext.client,
+    isRunning: () => clangdContext.clientRunning
+  };
 }

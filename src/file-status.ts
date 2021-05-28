@@ -27,6 +27,7 @@ class FileStatus {
   private statuses = new Map<string, any>();
   private readonly statusBarItem =
       vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 10);
+  clientRunning = false;
 
   constructor(onClickCommand: string) {
     this.statusBarItem.command = onClickCommand;
@@ -51,12 +52,15 @@ class FileStatus {
       return;
     }
     this.statusBarItem.text = `clangd: ` + status.state;
+    this.statusBarItem.color = status.state === 'idle' ? 'white' : 'yellow';
     this.statusBarItem.show();
   }
 
   clear() {
     this.statuses.clear();
-    this.statusBarItem.hide();
+    this.statusBarItem.text = 'clangd: error';
+    this.statusBarItem.color = 'red';
+    this.statusBarItem.show();
   }
 
   dispose() { this.statusBarItem.dispose(); }

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as vscodelc from 'vscode-languageclient/node';
+import { State } from 'vscode-languageclient/node';
 
 import * as ast from './ast';
 import * as config from './config';
@@ -59,6 +60,7 @@ class EnableEditsNearCursorFeature implements vscodelc.StaticFeature {
 export class ClangdContext implements vscode.Disposable {
   subscriptions: vscode.Disposable[] = [];
   client!: ClangdLanguageClient;
+  clientRunning = false;
 
   async activate(globalStoragePath: string, outputChannel: vscode.OutputChannel,
                  workspaceState: vscode.Memento) {
@@ -148,10 +150,15 @@ export class ClangdContext implements vscode.Disposable {
 
     this.client = new ClangdLanguageClient('Clang Language Server',
                                            serverOptions, clientOptions);
-    this.client.clientOptions.errorHandler =
-        this.client.createDefaultErrorHandler(
-            // max restart count
-            config.get<boolean>('restartAfterCrash') ? /*default*/ 4 : 0);
+    this.client.clientOptions.errorHandler = {
+      error(error: Error, message: vscodelc.Message, count: number):
+          vscodelc.ErrorAction { return vscodelc.ErrorAction.Continue; },
+      closed():
+          vscodelc.CloseAction { return vscodelc.CloseAction.DoNotRestart; }
+    };
+    this.client.createDefaultErrorHandler(
+        // max restart count
+        config.get<boolean>('restartAfterCrash') ? /*default*/ 4 : 0);
     if (config.get<boolean>('semanticHighlighting'))
       semanticHighlighting.activate(this);
     this.client.registerFeature(new EnableEditsNearCursorFeature);
@@ -165,6 +172,13 @@ export class ClangdContext implements vscode.Disposable {
     fileStatus.activate(this);
     switchSourceHeader.activate(this);
     configFileWatcher.activate(this);
+    this.subscriptions.push(this.client.onDidChangeState((state) => {
+      if (state.newState === vscodelc.State.Running) {
+        this.clientRunning = true;
+      } else if (state.newState === vscodelc.State.Stopped) {
+        this.clientRunning = false;
+      }
+    }));
   }
 
   get visibleClangdEditors(): vscode.TextEditor[] {
