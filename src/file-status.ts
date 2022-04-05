@@ -51,12 +51,16 @@ class FileStatus {
       return;
     }
     this.statusBarItem.text = `clangd: ` + status.state;
+    this.statusBarItem.color = status.state === 'idle' ? 'white' : 'yellow';
+    this.statusBarItem.backgroundColor = undefined;
     this.statusBarItem.show();
   }
 
   clear() {
     this.statuses.clear();
-    this.statusBarItem.hide();
+    this.statusBarItem.text = 'clangd: error';
+    this.statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
+    this.statusBarItem.show();
   }
 
   dispose() { this.statusBarItem.dispose(); }

@@ -59,6 +59,7 @@ class EnableEditsNearCursorFeature implements vscodelc.StaticFeature {
 export class ClangdContext implements vscode.Disposable {
   subscriptions: vscode.Disposable[] = [];
   client!: ClangdLanguageClient;
+  clientRunning = false;
 
   async activate(globalStoragePath: string,
                  outputChannel: vscode.OutputChannel) {
@@ -168,6 +169,13 @@ export class ClangdContext implements vscode.Disposable {
     fileStatus.activate(this);
     switchSourceHeader.activate(this);
     configFileWatcher.activate(this);
+    this.subscriptions.push(this.client.onDidChangeState((state) => {
+      if (state.newState === vscodelc.State.Running) {
+        this.clientRunning = true;
+      } else if (state.newState === vscodelc.State.Stopped) {
+        this.clientRunning = false;
+      }
+    }));
   }
 
   get visibleClangdEditors(): vscode.TextEditor[] {
